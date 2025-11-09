@@ -31,11 +31,9 @@ def _worker_process(worker_id, db_path, shutdown_event):
         db_path: Path to database
         shutdown_event: Shutdown event (shared between processes)
     """
-    # Create storage and config instances in this process
     storage = Storage(db_path)
     config = Config(storage)
     
-    # Create and run worker
     worker = Worker(worker_id, storage, config, shutdown_event)
     worker.run()
 
@@ -65,25 +63,21 @@ class Worker:
         
         while not self.shutdown_event.is_set():
             try:
-                # Check for stop file (for `queuectl worker stop` command)
                 from pathlib import Path
                 stop_file = Path.home() / ".queuectl" / "stop"
                 if stop_file.exists():
                     print(f"[Worker {self.worker_id}] Stop file detected, shutting down")
                     self.shutdown_event.set()
                     break
-                
-                # Try to claim a job
+  
                 job_data = self.storage.claim_job(self.worker_id)
                 
                 if job_data:
                     job = Job.from_dict(job_data)
                     print(f"[Worker {self.worker_id}] Claimed job {job.id}")
-                    
-                    # Execute the job
+
                     self.execute_job(job)
                 else:
-                    # No jobs available, wait before polling again
                     time.sleep(self.poll_interval)
             
             except Exception as e:
@@ -111,12 +105,10 @@ class Worker:
                 timeout=timeout,
                 text=True
             )
-            
-            # Truncate output to avoid bloated database
+
             stdout = result.stdout[:MAX_OUTPUT_LEN] if result.stdout else ""
             stderr = result.stderr[:MAX_OUTPUT_LEN] if result.stderr else ""
-            
-            # Determine outcome based on exit code
+
             if result.returncode == 0:
                 self.mark_completed(job, stdout, stderr, result.returncode)
             else:
@@ -178,14 +170,11 @@ class Worker:
             'stderr': stderr,
             'exit_code': exit_code,
         }
-        
-        # Check if job should be retried or moved to DLQ
+
         if job.attempts >= job.max_retries:
-            # Move to Dead Letter Queue
             print(f"[Worker {self.worker_id}] Job {job.id} moved to DLQ after {job.attempts} attempts")
             updates['state'] = JobState.DEAD
         else:
-            # Schedule retry with exponential backoff
             backoff_base = self.config.get('backoff_base', 2)
             delay = backoff_base ** job.attempts
             run_at = datetime.utcnow() + timedelta(seconds=delay)
@@ -214,7 +203,6 @@ class WorkerManager:
         self.storage = storage
         self.config = config
         self.workers = []
-        # Use Manager for cross-process Event
         self.manager = Manager()
         self.shutdown_event = self.manager.Event()
     
@@ -226,15 +214,12 @@ class WorkerManager:
             count: Number of workers to start
         """
         print(f"Starting {count} worker(s)...")
-        
-        # Setup signal handlers for graceful shutdown
         signal.signal(signal.SIGINT, self._signal_handler)
         signal.signal(signal.SIGTERM, self._signal_handler)
         
         for i in range(count):
             worker_id = f"worker-{uuid.uuid4().hex[:8]}"
-            
-            # Start worker process with module-level function
+
             process = Process(
                 target=_worker_process,
                 args=(worker_id, self.storage.db_path, self.shutdown_event),
@@ -248,8 +233,7 @@ class WorkerManager:
             })
         
         print(f"All workers started. Press Ctrl+C to stop.")
-        
-        # Wait for all workers to finish
+
         try:
             for worker_info in self.workers:
                 worker_info['process'].join()
@@ -267,13 +251,11 @@ class WorkerManager:
         """Stop all running workers gracefully"""
         print("Requesting worker shutdown...")
         self.shutdown_event.set()
-        
-        # Wait for workers to finish current jobs
+
         for worker_info in self.workers:
             if worker_info['process'].is_alive():
                 worker_info['process'].join(timeout=30)
-                
-                # Force terminate if still alive after timeout
+
                 if worker_info['process'].is_alive():
                     print(f"Force terminating {worker_info['id']}")
                     worker_info['process'].terminate()

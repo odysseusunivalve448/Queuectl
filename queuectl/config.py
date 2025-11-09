@@ -8,16 +8,14 @@ from .storage import Storage
 
 class Config:
     """Configuration manager"""
-    
-    # Configuration keys and their defaults
+
     DEFAULTS = {
         'max_retries': 3,
         'backoff_base': 2,
         'job_timeout': 300,
         'worker_poll_interval': 1,
     }
-    
-    # Valid configuration keys
+
     VALID_KEYS = set(DEFAULTS.keys())
     
     def __init__(self, storage: Storage):

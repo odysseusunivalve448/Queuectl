@@ -111,15 +111,13 @@ def stop():
     Note: This command works best when workers are running in foreground mode.
     For background workers, use system commands like 'kill' with PID.
     """
-    # Create stop flag file
     stop_file = Path.home() / ".queuectl" / "stop"
     stop_file.parent.mkdir(parents=True, exist_ok=True)
     stop_file.touch()
     
     click.echo("✓ Stop signal sent to workers")
     click.echo("  Workers will finish their current jobs and then exit")
-    
-    # Clean up stop file after a moment
+
     import time
     time.sleep(2)
     if stop_file.exists():
@@ -139,8 +137,7 @@ def status():
     click.echo("=" * 50)
     click.echo("QUEUE STATUS")
     click.echo("=" * 50)
-    
-    # Job counts by state
+
     jobs = status_info['jobs']
     click.echo(f"\nJobs:")
     click.echo(f"  Pending:    {jobs['pending']:>5}")
@@ -150,11 +147,9 @@ def status():
     click.echo(f"  Dead (DLQ): {jobs['dead']:>5}")
     click.echo(f"  {'-' * 20}")
     click.echo(f"  Total:      {status_info['total_jobs']:>5}")
-    
-    # Workers
+
     click.echo(f"\nActive Workers: {status_info['active_workers']}")
-    
-    # Config
+
     config = get_config()
     all_config = config.get_all()
     click.echo(f"\nConfiguration:")
@@ -180,8 +175,7 @@ def list(state, limit):
     if not jobs:
         click.echo(f"No jobs found" + (f" with state '{state}'" if state else ""))
         return
-    
-    # Limit results
+
     jobs = jobs[:limit]
     
     click.echo("=" * 100)
@@ -275,7 +269,6 @@ def config_set(key, value):
     
     Example: queuectl config set max-retries 5
     """
-    # Convert hyphenated key to underscore
     key = key.replace('-', '_')
     
     cfg = get_config()
@@ -284,15 +277,14 @@ def config_set(key, value):
         click.echo(f"✗ Invalid configuration key: {key}", err=True)
         click.echo(f"  Valid keys: {', '.join(sorted(cfg.VALID_KEYS))}")
         sys.exit(1)
-    
-    # Try to convert value to appropriate type
+
     try:
         if '.' in value:
             value = float(value)
         else:
             value = int(value)
     except ValueError:
-        pass  # Keep as string
+        pass
     
     cfg.set(key, value)
     click.echo(f"✓ Configuration updated: {key} = {value}")

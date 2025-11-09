@@ -15,7 +15,6 @@ class Storage:
     def __init__(self, db_path: str = None):
         """Initialize storage with database path"""
         if db_path is None:
-            # Default to data/queuectl.db
             base_dir = Path.home() / ".queuectl"
             base_dir.mkdir(parents=True, exist_ok=True)
             db_path = str(base_dir / "queuectl.db")
@@ -55,20 +54,17 @@ class Storage:
             )
         """)
         
-        # Create indexes
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_jobs_state ON jobs(state)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_jobs_run_at ON jobs(run_at)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_jobs_locked_at ON jobs(locked_at)")
         
-        # Create config table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS config (
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL
             )
         """)
-        
-        # Insert default config if not exists
+
         default_config = [
             ('max_retries', '3'),
             ('backoff_base', '2'),
@@ -171,11 +167,9 @@ class Storage:
         """Update job fields"""
         conn = self._get_connection()
         cursor = conn.cursor()
-        
-        # Always update the updated_at timestamp
+
         updates['updated_at'] = datetime.utcnow().isoformat()
-        
-        # Build dynamic UPDATE query
+
         fields = ', '.join([f"{k} = ?" for k in updates.keys()])
         values = list(updates.values()) + [job_id]
         
@@ -229,7 +223,6 @@ class Storage:
         
         if row:
             value = row['value']
-            # Try to convert to appropriate type
             try:
                 return int(value)
             except ValueError:
@@ -263,7 +256,6 @@ class Storage:
         config = {}
         for row in cursor.fetchall():
             value = row['value']
-            # Try to convert to appropriate type
             try:
                 config[row['key']] = int(value)
             except ValueError:

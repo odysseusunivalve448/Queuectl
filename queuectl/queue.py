@@ -27,26 +27,22 @@ class Queue:
         Returns:
             Job object if successful, None otherwise
         """
-        # Validate required fields
+
         if 'command' not in job_data:
             raise ValueError("Job must have a 'command' field")
-        
-        # Generate ID if not provided
+
         if 'id' not in job_data:
             job_data['id'] = Job.generate_id()
-        
-        # Set defaults from config if not provided
+
         if 'max_retries' not in job_data:
             job_data['max_retries'] = self.config.get('max_retries', 3)
-        
-        # Set timestamps
+
         now = datetime.utcnow().isoformat()
         if 'created_at' not in job_data:
             job_data['created_at'] = now
         if 'updated_at' not in job_data:
             job_data['updated_at'] = now
-        
-        # Create job
+
         success = self.storage.create_job(job_data)
         
         if success:
@@ -90,8 +86,7 @@ class Queue:
             Dictionary with status information
         """
         stats = self.storage.get_job_stats()
-        
-        # Count active workers (jobs in processing state)
+
         active_workers = self._count_active_workers()
         
         return {
@@ -104,7 +99,6 @@ class Queue:
     def _count_active_workers(self) -> int:
         """Count number of active workers"""
         processing_jobs = self.storage.list_jobs('processing')
-        # Count unique worker IDs
         worker_ids = set(job['worker_id'] for job in processing_jobs if job.get('worker_id'))
         return len(worker_ids)
     
