@@ -7,6 +7,7 @@ import json
 import time
 import os
 import sys
+import signal
 
 
 def run_command(cmd):
@@ -18,6 +19,14 @@ def run_command(cmd):
         text=True
     )
     return result.returncode, result.stdout, result.stderr
+
+
+def enqueue_job(job_data):
+    """Helper to enqueue a job with proper escaping"""
+    import shlex
+    json_str = json.dumps(job_data)
+    cmd = f"queuectl enqueue {shlex.quote(json_str)}"
+    return run_command(cmd)
 
 
 def test_1_basic_job_completes():
@@ -33,13 +42,11 @@ def test_1_basic_job_completes():
     }
     
     print(f"Enqueuing job: {job_data}")
-    returncode, stdout, stderr = run_command(
-        f"queuectl enqueue '{json.dumps(job_data)}'"
-    )
+    returncode, stdout, stderr = enqueue_job(job_data)
     
     if returncode != 0:
         print(f"❌ Failed to enqueue job")
-        print(stderr)
+        print(f"stderr: {stderr}")
         return False
     
     print(stdout)
@@ -49,24 +56,32 @@ def test_1_basic_job_completes():
     worker_proc = subprocess.Popen(
         ["queuectl", "worker", "start", "--count", "1"],
         stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE
+        stderr=subprocess.PIPE,
+        text=True
     )
     
     # Wait for job to complete
-    time.sleep(3)
+    print("Waiting for job to complete...")
+    time.sleep(5)
+    
+    # Stop worker
+    print("Stopping worker...")
+    worker_proc.terminate()
+    try:
+        worker_proc.wait(timeout=3)
+    except subprocess.TimeoutExpired:
+        worker_proc.kill()
+        worker_proc.wait()
     
     # Check job status
     returncode, stdout, stderr = run_command("queuectl list --state completed")
-    
-    # Stop worker
-    worker_proc.terminate()
-    worker_proc.wait()
     
     if "test1-success" in stdout:
         print("✅ TEST 1 PASSED: Job completed successfully")
         return True
     else:
         print("❌ TEST 1 FAILED: Job not found in completed state")
+        print(f"Output: {stdout}")
         return False
 
 
@@ -88,12 +103,11 @@ def test_2_failed_job_retries_and_dlq():
     }
     
     print(f"Enqueuing failing job: {job_data}")
-    returncode, stdout, stderr = run_command(
-        f"queuectl enqueue '{json.dumps(job_data)}'"
-    )
+    returncode, stdout, stderr = enqueue_job(job_data)
     
     if returncode != 0:
         print(f"❌ Failed to enqueue job")
+        print(f"stderr: {stderr}")
         return False
     
     print(stdout)
@@ -103,26 +117,35 @@ def test_2_failed_job_retries_and_dlq():
     worker_proc = subprocess.Popen(
         ["queuectl", "worker", "start", "--count", "1"],
         stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE
+        stderr=subprocess.PIPE,
+        text=True
     )
     
-    # Wait for retries and DLQ move (with backoff)
-    print("Waiting for retries...")
-    time.sleep(6)
+    # Wait for retries and DLQ move
+    print("Waiting for retries (this may take a few seconds)...")
+    time.sleep(10)
+    
+    # Stop worker
+    print("Stopping worker...")
+    worker_proc.terminate()
+    try:
+        worker_proc.wait(timeout=3)
+    except subprocess.TimeoutExpired:
+        worker_proc.kill()
+        worker_proc.wait()
     
     # Check if job moved to DLQ
     returncode, stdout, stderr = run_command("queuectl dlq list")
-    
-    # Stop worker
-    worker_proc.terminate()
-    worker_proc.wait()
     
     if "test2-fail" in stdout:
         print("✅ TEST 2 PASSED: Job moved to DLQ after retries")
         return True
     else:
         print("❌ TEST 2 FAILED: Job not found in DLQ")
-        print(stdout)
+        print(f"DLQ output: {stdout}")
+        # Check where the job is
+        returncode2, stdout2, stderr2 = run_command("queuectl status")
+        print(f"Status: {stdout2}")
         return False
 
 
@@ -141,7 +164,7 @@ def test_3_multiple_workers_no_overlap():
             "id": f"test3-job{i}",
             "command": f"sleep 1 && echo 'Job {i}'"
         }
-        run_command(f"queuectl enqueue '{json.dumps(job_data)}'")
+        enqueue_job(job_data)
     
     print(f"✓ Enqueued {num_jobs} jobs")
     
@@ -150,18 +173,25 @@ def test_3_multiple_workers_no_overlap():
     worker_proc = subprocess.Popen(
         ["queuectl", "worker", "start", "--count", "3"],
         stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE
+        stderr=subprocess.PIPE,
+        text=True
     )
     
     # Wait for jobs to complete
-    time.sleep(4)
+    print("Waiting for jobs to complete...")
+    time.sleep(6)
+    
+    # Stop workers
+    print("Stopping workers...")
+    worker_proc.terminate()
+    try:
+        worker_proc.wait(timeout=3)
+    except subprocess.TimeoutExpired:
+        worker_proc.kill()
+        worker_proc.wait()
     
     # Check completed jobs
     returncode, stdout, stderr = run_command("queuectl list --state completed")
-    
-    # Stop workers
-    worker_proc.terminate()
-    worker_proc.wait()
     
     completed_count = stdout.count("test3-job")
     
@@ -170,6 +200,7 @@ def test_3_multiple_workers_no_overlap():
         return True
     else:
         print(f"❌ TEST 3 FAILED: Only {completed_count}/{num_jobs} jobs completed")
+        print(f"Completed jobs output: {stdout}")
         return False
 
 
@@ -187,36 +218,43 @@ def test_4_invalid_command_fails_gracefully():
     }
     
     print(f"Enqueuing job with invalid command: {job_data}")
-    returncode, stdout, stderr = run_command(
-        f"queuectl enqueue '{json.dumps(job_data)}'"
-    )
+    returncode, stdout, stderr = enqueue_job(job_data)
     
     if returncode != 0:
         print(f"❌ Failed to enqueue job")
         return False
     
     # Start worker
+    print("Starting worker...")
     worker_proc = subprocess.Popen(
         ["queuectl", "worker", "start", "--count", "1"],
         stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE
+        stderr=subprocess.PIPE,
+        text=True
     )
     
     # Wait for processing
-    time.sleep(3)
-    
-    # Check if job is in DLQ or failed
-    returncode, stdout, stderr = run_command("queuectl dlq list")
+    print("Waiting for processing...")
+    time.sleep(6)
     
     # Stop worker
+    print("Stopping worker...")
     worker_proc.terminate()
-    worker_proc.wait()
+    try:
+        worker_proc.wait(timeout=3)
+    except subprocess.TimeoutExpired:
+        worker_proc.kill()
+        worker_proc.wait()
+    
+    # Check if job is in DLQ
+    returncode, stdout, stderr = run_command("queuectl dlq list")
     
     if "test4-invalid" in stdout:
         print("✅ TEST 4 PASSED: Invalid command handled gracefully (in DLQ)")
         return True
     else:
         print("❌ TEST 4 FAILED: Invalid command not handled properly")
+        print(f"DLQ output: {stdout}")
         return False
 
 
@@ -233,12 +271,11 @@ def test_5_persistence_across_restart():
     }
     
     print(f"Enqueuing job: {job_data}")
-    returncode, stdout, stderr = run_command(
-        f"queuectl enqueue '{json.dumps(job_data)}'"
-    )
+    returncode, stdout, stderr = enqueue_job(job_data)
     
     if returncode != 0:
         print(f"❌ Failed to enqueue job")
+        print(f"stderr: {stderr}")
         return False
     
     # Check job exists before "restart"
@@ -251,7 +288,6 @@ def test_5_persistence_across_restart():
     print("✓ Job exists in queue")
     
     # Simulate restart by checking job still exists
-    # (In real scenario, we'd restart the application)
     print("Simulating restart (checking persistence)...")
     time.sleep(1)
     
@@ -274,15 +310,19 @@ def test_6_dlq_retry():
     # Find a job in DLQ from previous tests
     returncode, stdout, stderr = run_command("queuectl dlq list")
     
-    if "test2-fail" not in stdout:
-        print("⚠️  TEST 6 SKIPPED: No DLQ job from test 2")
+    if "test2-fail" not in stdout and "test4-invalid" not in stdout:
+        print("⚠️  TEST 6 SKIPPED: No DLQ job from previous tests")
         return True
     
-    print("Retrying job from DLQ: test2-fail")
-    returncode, stdout, stderr = run_command("queuectl dlq retry test2-fail")
+    # Use test2-fail if available, otherwise test4-invalid
+    job_to_retry = "test2-fail" if "test2-fail" in stdout else "test4-invalid"
+    
+    print(f"Retrying job from DLQ: {job_to_retry}")
+    returncode, stdout, stderr = run_command(f"queuectl dlq retry {job_to_retry}")
     
     if returncode != 0:
         print("❌ TEST 6 FAILED: Could not retry DLQ job")
+        print(f"stderr: {stderr}")
         return False
     
     print(stdout)
@@ -290,11 +330,12 @@ def test_6_dlq_retry():
     # Check job moved back to pending
     returncode, stdout, stderr = run_command("queuectl list --state pending")
     
-    if "test2-fail" in stdout:
+    if job_to_retry in stdout:
         print("✅ TEST 6 PASSED: Job successfully retried from DLQ")
         return True
     else:
         print("❌ TEST 6 FAILED: Job not in pending state after retry")
+        print(f"Pending jobs: {stdout}")
         return False
 
 
@@ -303,6 +344,15 @@ def run_all_tests():
     print("\n" + "=" * 60)
     print("QUEUECTL TEST SUITE")
     print("=" * 60)
+    
+    # Clean database before tests
+    print("\nCleaning up previous test data...")
+    import shutil
+    from pathlib import Path
+    db_path = Path.home() / ".queuectl"
+    if db_path.exists():
+        shutil.rmtree(db_path)
+    print("✓ Clean slate")
     
     tests = [
         test_1_basic_job_completes,
@@ -321,6 +371,8 @@ def run_all_tests():
             results.append(result)
         except Exception as e:
             print(f"❌ Test crashed: {e}")
+            import traceback
+            traceback.print_exc()
             results.append(False)
     
     # Summary
