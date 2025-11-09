@@ -16,7 +16,6 @@ from .config import Config
 from .models import Job, JobState
 
 
-# Constants
 MAX_OUTPUT_LEN = 2000
 DEFAULT_TIMEOUT = 300
 
