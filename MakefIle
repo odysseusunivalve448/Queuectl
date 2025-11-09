@@ -38,4 +38,4 @@ clean:
 
 # Quick start
 quickstart: install demo
-	@echo "✓ Quick start complete!"
+	@echo "✓ Quick start complete!
