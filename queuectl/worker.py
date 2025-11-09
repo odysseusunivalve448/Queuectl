@@ -21,6 +21,25 @@ MAX_OUTPUT_LEN = 2000
 DEFAULT_TIMEOUT = 300
 
 
+def _worker_process(worker_id: str, db_path: str, shutdown_event: Event):
+    """
+    Worker process function (must be at module level for multiprocessing)
+    This is called by WorkerManager in a separate process.
+    
+    Args:
+        worker_id: Unique worker identifier
+        db_path: Path to database
+        shutdown_event: Shutdown event
+    """
+    # Create storage and config instances in this process
+    storage = Storage(db_path)
+    config = Config(storage)
+    
+    # Create and run worker
+    worker = Worker(worker_id, storage, config, shutdown_event)
+    worker.run()
+
+
 class Worker:
     """Worker process that executes jobs from the queue"""
     
@@ -181,6 +200,25 @@ class Worker:
         self.storage.update_job(job.id, updates)
 
 
+def _worker_process(worker_id: str, db_path: str, config_dict: dict, shutdown_event: Event):
+    """
+    Worker process function (must be at module level for multiprocessing)
+    
+    Args:
+        worker_id: Unique worker identifier
+        db_path: Path to database
+        config_dict: Configuration dictionary
+        shutdown_event: Shutdown event
+    """
+    # Create storage and config instances in this process
+    storage = Storage(db_path)
+    config = Config(storage)
+    
+    # Create and run worker
+    worker = Worker(worker_id, storage, config, shutdown_event)
+    worker.run()
+
+
 class WorkerManager:
     """Manages multiple worker processes"""
     
@@ -210,15 +248,18 @@ class WorkerManager:
         signal.signal(signal.SIGINT, self._signal_handler)
         signal.signal(signal.SIGTERM, self._signal_handler)
         
+        # Get config dict to pass to workers
+        config_dict = self.config.get_all()
+        
         for i in range(count):
             worker_id = f"worker-{uuid.uuid4().hex[:8]}"
             
-            # Create worker with its own storage instance (for thread safety)
-            worker_storage = Storage(self.storage.db_path)
-            worker = Worker(worker_id, worker_storage, self.config, self.shutdown_event)
-            
-            # Start worker process
-            process = Process(target=worker.run, name=worker_id)
+            # Start worker process with module-level function
+            process = Process(
+                target=_worker_process,
+                args=(worker_id, self.storage.db_path, self.shutdown_event),
+                name=worker_id
+            )
             process.start()
             
             self.workers.append({
