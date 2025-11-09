@@ -88,6 +88,7 @@ def test_2_failed_job_retries_and_dlq():
 
     run_command("queuectl config set max-retries 2")
     run_command("queuectl config set backoff-base 1")
+    run_command("queuectl config set worker-poll-interval 1")
 
     job_data = {
         "id": "test2-fail",
@@ -109,12 +110,18 @@ def test_2_failed_job_retries_and_dlq():
     worker_proc = subprocess.Popen(
         ["queuectl", "worker", "start", "--count", "1"],
         stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
         text=True
     )
 
-    print("Waiting for retries (this may take a few seconds)...")
-    time.sleep(15)
+    print("Waiting for all retries to complete...")
+    for i in range(20):
+        time.sleep(1)
+        # Check if job is in DLQ yet
+        returncode, stdout, stderr = run_command("queuectl dlq list")
+        if "test2-fail" in stdout:
+            print(f"Job moved to DLQ after {i+1} seconds")
+            break
 
     print("Stopping worker...")
     worker_proc.terminate()
@@ -134,6 +141,8 @@ def test_2_failed_job_retries_and_dlq():
         print(f"DLQ output: {stdout}")
         returncode2, stdout2, stderr2 = run_command("queuectl status")
         print(f"Status: {stdout2}")
+        returncode3, stdout3, stderr3 = run_command("queuectl list")
+        print(f"All jobs: {stdout3}")
         return False
 
 
@@ -174,7 +183,6 @@ def test_3_multiple_workers_no_overlap():
         worker_proc.kill()
         worker_proc.wait()
     
-
     returncode, stdout, stderr = run_command("queuectl list --state completed")
     
     completed_count = stdout.count("test3-job")
@@ -225,7 +233,8 @@ def test_4_invalid_command_fails_gracefully():
     except subprocess.TimeoutExpired:
         worker_proc.kill()
         worker_proc.wait()
-
+    
+    # Check if job is in DLQ
     returncode, stdout, stderr = run_command("queuectl dlq list")
     
     if "test4-invalid" in stdout:
@@ -264,7 +273,7 @@ def test_5_persistence_across_restart():
         return False
     
     print("✓ Job exists in queue")
-
+    
     print("Simulating restart (checking persistence)...")
     time.sleep(1)
     
@@ -283,13 +292,13 @@ def test_6_dlq_retry():
     print("\n" + "=" * 60)
     print("TEST 6: Retry job from DLQ")
     print("=" * 60)
-
+    
     returncode, stdout, stderr = run_command("queuectl dlq list")
     
     if "test2-fail" not in stdout and "test4-invalid" not in stdout:
         print("⚠️  TEST 6 SKIPPED: No DLQ job from previous tests")
         return True
-
+    
     job_to_retry = "test2-fail" if "test2-fail" in stdout else "test4-invalid"
     
     print(f"Retrying job from DLQ: {job_to_retry}")
@@ -301,7 +310,8 @@ def test_6_dlq_retry():
         return False
     
     print(stdout)
-
+    
+    # Check job moved back to pending
     returncode, stdout, stderr = run_command("queuectl list --state pending")
     
     if job_to_retry in stdout:
@@ -318,7 +328,8 @@ def run_all_tests():
     print("\n" + "=" * 60)
     print("QUEUECTL TEST SUITE")
     print("=" * 60)
-
+    
+    # Clean database before tests
     print("\nCleaning up previous test data...")
     import shutil
     from pathlib import Path
@@ -347,7 +358,8 @@ def run_all_tests():
             import traceback
             traceback.print_exc()
             results.append(False)
-
+    
+    # Summary
     print("\n" + "=" * 60)
     print("TEST SUMMARY")
     print("=" * 60)
